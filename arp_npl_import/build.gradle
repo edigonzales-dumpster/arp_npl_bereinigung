@@ -1,0 +1,52 @@
+import ch.so.agi.gretl.tasks.*
+import ch.so.agi.gretl.api.TransferSet
+import de.undercouch.gradle.tasks.download.Download
+import java.nio.file.Paths
+
+defaultTasks 'replaceData'
+
+def pathToTempFolder = System.getProperty("java.io.tmpdir")
+def nplDataSets = ["2401","2403","2405","2407","2408","2421","2455","2456","2457","2473","2474","2475","2476","2477","2479","2491","2498","2501","2502","2514","2546","2551","2573","2574","2580","2581","2582","2586","2613","2614","2615","2616","2617"]
+
+def GROUP = "npl_edit_import"
+
+nplDataSets.each { nplDataSet ->
+    def dataSet = nplDataSet.toString()
+
+    task "downloadData_$dataSet"(type: Download) {
+        group = GROUP
+        description = "Download NPL: ${dataSet}"
+        src "https://geo.so.ch/geodata/ch.so.arp.nutzungsplanung/" + dataSet + ".xtf"
+        dest pathToTempFolder
+        overwrite true
+
+        doLast {
+            println "File downloaded to: " + pathToTempFolder
+        }        
+    }
+
+    task "replaceDataset_$dataSet"(type: Ili2pgReplace, dependsOn: "downloadData_$dataSet") {
+        group = GROUP
+        description = "Import NPL: ${dataSet}"
+        database = [dbUriEdit, dbUserEdit, dbPwdEdit]
+        models = "SO_Nutzungsplanung_20171118"
+        dbschema = "arp_npl"
+        dataFile = file(Paths.get(pathToTempFolder.toString(), dataSet + ".xtf"))
+
+        dataset = dataSet
+        disableValidation = true
+        disableRounding = true
+
+        doLast {
+            println "Data imported into db: " + dbUriEdit
+        }        
+    }
+}
+
+task replaceData() {
+    description = "Aggregationstask für das Importieren/Ersetzen sämtlicher NPL-Daten."
+    group = GROUP
+    dependsOn {
+        tasks.findAll { task -> task.name.startsWith('replaceDataset_') }
+    }    
+}
